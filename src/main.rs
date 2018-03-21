@@ -3,6 +3,7 @@ extern crate lazy_static;
 extern crate regex;
 extern crate solvent;
 
+use std::env;
 use std::io::{BufRead, BufReader};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -20,13 +21,35 @@ impl Feature {
     }
 }
 
+#[derive(Debug)]
+struct Options {
+    local_only: bool,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options { local_only: false }
+    }
+}
+
 fn main() {
-    if let Err(err) = resolve_dependencies(".") {
+    let opts = parse_options();
+    if let Err(err) = resolve_dependencies(".", &opts) {
         eprintln!("{}", err);
     }
 }
 
-fn resolve_dependencies<P>(dir: P) -> Result<(), Box<std::error::Error>>
+fn parse_options() -> Options {
+    let mut opts = Options::default();
+    for arg in env::args() {
+        if arg == "-l" {
+            opts.local_only = true;
+        }
+    }
+    opts
+}
+
+fn resolve_dependencies<P>(dir: P, opts: &Options) -> Result<(), Box<std::error::Error>>
 where
     P: AsRef<Path>,
 {
@@ -48,7 +71,9 @@ where
                 continue;
             }
             if let Some(el) = path.to_str() {
-                deps.push(el);
+                if !opts.local_only || path.is_file() {
+                    deps.push(el);
+                }
             }
         }
         println!("{}: {}", elisp.display(), &deps[..].join(" "));
