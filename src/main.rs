@@ -21,15 +21,9 @@ impl Feature {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Options {
     local_only: bool,
-}
-
-impl Default for Options {
-    fn default() -> Self {
-        Options { local_only: false }
-    }
 }
 
 fn main() {
