@@ -70,14 +70,16 @@ where
                 }
             }
         }
-        print!("\"{}c\" [", elisp.display());
-        for (i, dep) in deps.iter().enumerate() {
-            if i > 0 {
-                print!(",");
+        if let Some(name) = elisp.file_name().and_then(|s| s.to_str()) {
+            print!("\"{}c\" [", name);
+            for (i, dep) in deps.iter().enumerate() {
+                if i > 0 {
+                    print!(",");
+                }
+                print!("\"{}c\"", dep);
             }
-            print!("\"{}c\"", dep);
+            println!("]");
         }
-        println!("]");
     }
     Ok(())
 }
