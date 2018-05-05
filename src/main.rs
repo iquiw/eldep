@@ -70,7 +70,14 @@ where
                 }
             }
         }
-        println!("{}: {}", elisp.display(), &deps[..].join(" "));
+        print!("\"{}c\" [", elisp.display());
+        for (i, dep) in deps.iter().enumerate() {
+            if i > 0 {
+                print!(",");
+            }
+            print!("\"{}c\"", dep);
+        }
+        println!("]");
     }
     Ok(())
 }
