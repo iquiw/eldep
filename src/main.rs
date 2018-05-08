@@ -2,14 +2,16 @@
 extern crate lazy_static;
 extern crate regex;
 extern crate solvent;
+extern crate tabwriter;
 
 use std::env;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use regex::Regex;
 use solvent::DepGraph;
+use tabwriter::TabWriter;
 
 struct Feature(String);
 
@@ -56,6 +58,7 @@ where
             }
         }
     }
+    let mut tw = TabWriter::new(std::io::stdout());
     let depgraph = gather_dependencies(&elisps)?;
     for elisp in elisps {
         let mut deps = vec![];
@@ -71,16 +74,17 @@ where
             }
         }
         if let Some(name) = elisp.file_name().and_then(|s| s.to_str()) {
-            print!("\"{}c\" [", name);
+            write!(&mut tw, "\"{}c\"\t[", name)?;
             for (i, dep) in deps.iter().enumerate() {
                 if i > 0 {
-                    print!(",");
+                    write!(&mut tw, ",")?;
                 }
-                print!("\"{}c\"", dep);
+                write!(&mut tw, "\"{}c\"", dep)?;
             }
-            println!("]");
+            writeln!(&mut tw, "]")?;
         }
     }
+    tw.flush()?;
     Ok(())
 }
 
