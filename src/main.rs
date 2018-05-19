@@ -5,8 +5,8 @@ extern crate solvent;
 extern crate tabwriter;
 
 use std::env;
-use std::io::{BufRead, BufReader, Write};
 use std::fs::File;
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use regex::Regex;
@@ -29,20 +29,27 @@ struct Options {
 }
 
 fn main() {
-    let opts = parse_options();
-    if let Err(err) = resolve_dependencies(".", &opts) {
+    let (opts, dir) = parse_options();
+    if let Err(err) = resolve_dependencies(&dir, &opts) {
         eprintln!("{}", err);
     }
 }
 
-fn parse_options() -> Options {
+fn parse_options() -> (Options, String) {
     let mut opts = Options::default();
-    for arg in env::args() {
+    let mut dir = ".".to_string();
+    let mut args = env::args().skip(1);
+    if let Some(arg) = args.next() {
         if arg == "-l" {
             opts.local_only = true;
+            if let Some(arg) = args.next() {
+                dir = arg;
+            }
+        } else {
+            dir = arg;
         }
     }
-    opts
+    (opts, dir)
 }
 
 fn resolve_dependencies<P>(dir: P, opts: &Options) -> Result<(), Box<std::error::Error>>
@@ -63,11 +70,13 @@ where
     for elisp in elisps {
         let mut deps = vec![];
         for d in depgraph.dependencies_of(&elisp)? {
-            let path = d?;
-            if path == &elisp {
+            let file = d?;
+            if file == &elisp {
                 continue;
             }
-            if let Some(el) = path.to_str() {
+            let mut path = PathBuf::from(dir.as_ref());
+            path.push(file);
+            if let Some(el) = file.to_str() {
                 if !opts.local_only || path.is_file() {
                     deps.push(el);
                 }
