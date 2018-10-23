@@ -65,19 +65,25 @@ where
             }
         }
     }
-    let mut tw = TabWriter::new(std::io::stdout());
     let depgraph = gather_dependencies(&elisps)?;
+    show_dependencies(&dir, &elisps, &depgraph, opts.local_only)
+}
+
+fn show_dependencies<P>(dir: &P, elisps: &Vec<PathBuf>, depgraph: &DepGraph<PathBuf>, local_only: bool) -> Result<(), Box<std::error::Error>>
+    where P: AsRef<Path>
+{
+    let mut tw = TabWriter::new(std::io::stdout());
     for elisp in elisps {
         let mut deps = vec![];
         for d in depgraph.dependencies_of(&elisp)? {
             let file = d?;
-            if file == &elisp {
+            if file == elisp {
                 continue;
             }
             let mut path = PathBuf::from(dir.as_ref());
             path.push(file);
             if let Some(el) = file.to_str() {
-                if !opts.local_only || path.is_file() {
+                if !local_only || path.is_file() {
                     deps.push(el);
                 }
             }
