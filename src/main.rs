@@ -69,8 +69,14 @@ where
     show_dependencies(&dir, &elisps, &depgraph, opts.local_only)
 }
 
-fn show_dependencies<P>(dir: &P, elisps: &Vec<PathBuf>, depgraph: &DepGraph<PathBuf>, local_only: bool) -> Result<(), Box<std::error::Error>>
-    where P: AsRef<Path>
+fn show_dependencies<P>(
+    dir: &P,
+    elisps: &Vec<PathBuf>,
+    depgraph: &DepGraph<PathBuf>,
+    local_only: bool,
+) -> Result<(), Box<std::error::Error>>
+where
+    P: AsRef<Path>,
 {
     let mut tw = TabWriter::new(std::io::stdout());
     for elisp in elisps {
