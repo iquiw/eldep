@@ -1,25 +1,79 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate regex;
-extern crate solvent;
 extern crate tabwriter;
 
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use regex::Regex;
-use solvent::DepGraph;
 use tabwriter::TabWriter;
 
-struct Feature(String);
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+struct Feature {
+    name: String,
+    path: Option<PathBuf>,
+}
 
 impl Feature {
-    fn to_path_buf(&self) -> PathBuf {
-        let mut path = PathBuf::from(&self.0);
-        path.set_extension("el");
-        path
+    fn new(name: &str, path: Option<PathBuf>) -> Self {
+        Feature {
+            name: name.to_string(),
+            path: path,
+        }
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn path_buf(&self) -> &Option<PathBuf> {
+        &self.path
+    }
+}
+
+struct DepResolver {
+    cache: HashMap<String, Vec<Feature>>,
+}
+
+impl DepResolver {
+    fn new() -> Self {
+        DepResolver {
+            cache: HashMap::new(),
+        }
+    }
+
+    fn depend(&mut self, feat: &Feature, dependencies: Vec<Feature>) {
+        self.cache.insert(feat.name().to_string(), dependencies);
+    }
+
+    fn dependencies(&self, feat: &Feature) -> DepIterator {
+        let deps = self.cache.get(feat.name());
+        DepIterator {
+            index: 0,
+            deps: deps,
+        }
+    }
+}
+
+struct DepIterator<'a> {
+    index: usize,
+    deps: Option<&'a Vec<Feature>>,
+}
+
+impl<'a> Iterator for DepIterator<'a> {
+    type Item = &'a Feature;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.deps.and_then(|v| {
+            if self.index < v.len() {
+                self.index += 1;
+                Some(&v[self.index - 1])
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -56,75 +110,73 @@ fn resolve_dependencies<P>(dir: P, opts: &Options) -> Result<(), Box<std::error:
 where
     P: AsRef<Path>,
 {
-    let mut elisps = vec![];
+    let mut features = vec![];
     for entry in dir.as_ref().read_dir()? {
         let path = entry?.path();
         if let Some(ext) = path.extension().and_then(|ext| ext.to_str()) {
             if ext == "el" {
-                elisps.push(path.to_path_buf());
+                features.push(Feature::new(
+                    &path
+                        .with_extension("")
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy(),
+                    Some(path.clone()),
+                ));
             }
         }
     }
-    let depgraph = gather_dependencies(&elisps)?;
-    show_dependencies(&dir, &elisps, &depgraph, opts.local_only)
+    let depgraph = gather_dependencies(&features)?;
+    show_dependencies(&dir, &features, &depgraph, opts.local_only)
 }
 
 fn show_dependencies<P>(
     dir: &P,
-    elisps: &Vec<PathBuf>,
-    depgraph: &DepGraph<PathBuf>,
+    features: &Vec<Feature>,
+    resolver: &DepResolver,
     local_only: bool,
 ) -> Result<(), Box<std::error::Error>>
 where
     P: AsRef<Path>,
 {
     let mut tw = TabWriter::new(std::io::stdout());
-    for elisp in elisps {
+    for feature in features {
         let mut deps = vec![];
-        for d in depgraph.dependencies_of(&elisp)? {
-            let file = d?;
-            if file == elisp {
+        for dep in resolver.dependencies(&feature) {
+            if dep == feature {
                 continue;
             }
-            let mut path = PathBuf::from(dir.as_ref());
-            path.push(file);
-            if let Some(el) = file.to_str() {
+            if let Some(path_buf) = dep.path_buf() {
+                let mut path = PathBuf::from(dir.as_ref());
+                path.push(&path_buf);
                 if !local_only || path.is_file() {
-                    deps.push(el);
+                    deps.push(dep.name().to_string());
                 }
             }
         }
-        if let Some(name) = elisp.file_name().and_then(|s| s.to_str()) {
-            write!(&mut tw, "\"{}c\"\t[", name)?;
-            for (i, dep) in deps.iter().enumerate() {
-                if i > 0 {
-                    write!(&mut tw, ",")?;
-                }
-                write!(&mut tw, "\"{}c\"", dep)?;
+        write!(&mut tw, "\"{}.elc\"\t[", feature.name())?;
+        for (i, dep) in deps.iter().enumerate() {
+            if i > 0 {
+                write!(&mut tw, ",")?;
             }
-            writeln!(&mut tw, "]")?;
+            write!(&mut tw, "\"{}.elc\"", dep)?;
         }
+        writeln!(&mut tw, "]")?;
     }
     tw.flush()?;
     Ok(())
 }
 
-fn gather_dependencies<P>(elisps: &Vec<P>) -> Result<DepGraph<PathBuf>, Box<std::error::Error>>
-where
-    P: AsRef<Path>,
-{
-    let mut depgraph = DepGraph::new();
-    for elisp in elisps {
-        match extract_requires(elisp) {
-            Ok(v) => {
-                if v.is_empty() {
-                    depgraph.register_node(elisp.as_ref().to_path_buf());
+fn gather_dependencies(features: &Vec<Feature>) -> Result<DepResolver, Box<std::error::Error>> {
+    let mut depgraph = DepResolver::new();
+    for feature in features {
+        if let Some(path_buf) = feature.path_buf() {
+            match extract_requires(&path_buf) {
+                Ok(v) => {
+                    depgraph.depend(feature, v);
                 }
-                for f in v {
-                    depgraph.register_dependency(elisp.as_ref().to_path_buf(), f.to_path_buf());
-                }
+                Err(err) => eprintln!("{}", err),
             }
-            Err(err) => eprintln!("{}", err),
         }
     }
     Ok(depgraph)
@@ -137,13 +189,21 @@ where
     lazy_static! {
         static ref RE: Regex = Regex::new(r"^\(require '([\w-]+)\)").unwrap();
     }
-    let f = File::open(path)?;
-    let reader = BufReader::new(f);
+    let file = File::open(&path)?;
+    let reader = BufReader::new(file);
     let mut v = vec![];
     for r in reader.lines() {
         let l = r?;
         if let Some(f) = RE.captures(&l).and_then(|c| c.get(1)) {
-            v.push(Feature(f.as_str().to_string()));
+            let mut req_path = PathBuf::from(path.as_ref().parent().unwrap());
+            req_path.push(f.as_str());
+            req_path.set_extension("el");
+            if req_path.exists() {
+                req_path.set_extension("elc");
+                v.push(Feature::new(&f.as_str().to_string(), Some(req_path)));
+            } else {
+                v.push(Feature::new(&f.as_str().to_string(), None));
+            }
         }
     }
     Ok(v)
