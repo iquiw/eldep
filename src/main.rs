@@ -143,15 +143,13 @@ where
     for feature in features {
         let mut deps = vec![];
         for dep in resolver.dependencies(&feature) {
-            if dep == feature {
-                continue;
-            }
-            if let Some(path_buf) = dep.path_buf() {
-                let mut path = PathBuf::from(dir.as_ref());
-                path.push(&path_buf);
-                if !local_only || path.is_file() {
-                    deps.push(dep.name().to_string());
-                }
+            let local = if let Some(path_buf) = dep.path_buf() {
+                path_buf.parent() == Some(dir.as_ref())
+            } else {
+                false
+            };
+            if !local_only || local {
+                deps.push(dep.name().to_string());
             }
         }
         write!(&mut tw, "\"{}.elc\"\t[", feature.name())?;
