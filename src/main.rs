@@ -35,16 +35,33 @@ impl Feature {
 
 struct DepResolver {
     cache: HashMap<String, Vec<Feature>>,
+    rev_cache: HashMap<String, Vec<Feature>>,
 }
 
 impl DepResolver {
     fn new() -> Self {
         DepResolver {
             cache: HashMap::new(),
+            rev_cache: HashMap::new(),
         }
     }
 
     fn depend(&mut self, feat: &Feature, dependencies: Vec<Feature>) {
+        for dep in &dependencies {
+            if dep.path_buf().is_none() {
+                continue;
+            }
+            let mut found = false;
+            if let Some(v) = self.rev_cache.get_mut(dep.name()) {
+                found = true;
+                v.push(feat.clone());
+            }
+            if !found {
+                let mut v = vec![];
+                v.push(feat.clone());
+                self.rev_cache.insert(dep.name().to_string(), v);
+            }
+        }
         self.cache.insert(feat.name().to_string(), dependencies);
     }
 
@@ -54,6 +71,16 @@ impl DepResolver {
             index: 0,
             deps: deps,
         }
+    }
+
+    fn toplevel_features(&self) -> Vec<&String> {
+        let mut v = vec![];
+        for name in self.cache.keys() {
+            if self.rev_cache.get(name).is_none() {
+                v.push(name);
+            }
+        }
+        v
     }
 }
 
@@ -80,6 +107,7 @@ impl<'a> Iterator for DepIterator<'a> {
 #[derive(Debug, Default)]
 struct Options {
     local_only: bool,
+    toplevel: bool,
 }
 
 fn main() {
@@ -93,12 +121,11 @@ fn parse_options() -> (Options, String) {
     let mut opts = Options::default();
     let mut dir = ".".to_string();
     let mut args = env::args().skip(1);
-    if let Some(arg) = args.next() {
+    while let Some(arg) = args.next() {
         if arg == "-l" {
             opts.local_only = true;
-            if let Some(arg) = args.next() {
-                dir = arg;
-            }
+        } else if arg == "-t" {
+            opts.toplevel = true;
         } else {
             dir = arg;
         }
@@ -126,8 +153,12 @@ where
             }
         }
     }
-    let depgraph = gather_dependencies(&features)?;
-    show_dependencies(&dir, &features, &depgraph, opts.local_only)
+    let resolver = gather_dependencies(&features)?;
+    if opts.toplevel {
+        show_toplevel(&resolver)
+    } else {
+        show_dependencies(&dir, &features, &resolver, opts.local_only)
+    }
 }
 
 fn show_dependencies<P>(
@@ -160,6 +191,15 @@ where
             write!(&mut tw, "\"{}.elc\"", dep)?;
         }
         writeln!(&mut tw, "]")?;
+    }
+    tw.flush()?;
+    Ok(())
+}
+
+fn show_toplevel(resolver: &DepResolver) -> Result<(), Box<std::error::Error>> {
+    let mut tw = TabWriter::new(std::io::stdout());
+    for name in resolver.toplevel_features() {
+        writeln!(&mut tw, "{}.elc", name);
     }
     tw.flush()?;
     Ok(())
