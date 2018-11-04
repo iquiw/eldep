@@ -198,9 +198,9 @@ where
             req_path.set_extension("el");
             if req_path.exists() {
                 req_path.set_extension("elc");
-                v.push(Feature::new(&f.as_str().to_string(), Some(req_path)));
+                v.push(Feature::new(f.as_str(), Some(req_path)));
             } else {
-                v.push(Feature::new(&f.as_str().to_string(), None));
+                v.push(Feature::new(f.as_str(), None));
             }
         }
     }
