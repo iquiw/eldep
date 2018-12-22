@@ -197,11 +197,9 @@ where
 }
 
 fn show_toplevel(resolver: &DepResolver) -> Result<(), Box<std::error::Error>> {
-    let mut tw = TabWriter::new(std::io::stdout());
     for name in resolver.toplevel_features() {
-        writeln!(&mut tw, "{}.elc", name);
+        println!("{}.elc", name);
     }
-    tw.flush()?;
     Ok(())
 }
 
