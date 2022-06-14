@@ -57,8 +57,7 @@ impl DepResolver {
                 v.push(feat.clone());
             }
             if !found {
-                let mut v = vec![];
-                v.push(feat.clone());
+                let v = vec![feat.clone()];
                 self.rev_cache.insert(dep.name().to_string(), v);
             }
         }
@@ -117,8 +116,8 @@ fn main() {
 fn parse_options() -> (Options, String) {
     let mut opts = Options::default();
     let mut dir = ".".to_string();
-    let mut args = env::args().skip(1);
-    while let Some(arg) = args.next() {
+    let args = env::args().skip(1);
+    for arg in args {
         if arg == "-l" {
             opts.local_only = true;
         } else if arg == "-t" {
@@ -170,7 +169,7 @@ where
     let mut tw = TabWriter::new(std::io::stdout());
     for feature in features {
         let mut deps = vec![];
-        for dep in resolver.dependencies(&feature) {
+        for dep in resolver.dependencies(feature) {
             let local = if let Some(path_buf) = dep.path_buf() {
                 path_buf.parent() == Some(dir.as_ref())
             } else {
