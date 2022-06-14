@@ -22,7 +22,7 @@ impl Feature {
     fn new(name: &str, path: Option<PathBuf>) -> Self {
         Feature {
             name: name.to_string(),
-            path: path,
+            path,
         }
     }
     fn name(&self) -> &str {
@@ -67,10 +67,7 @@ impl DepResolver {
 
     fn dependencies(&self, feat: &Feature) -> DepIterator {
         let deps = self.cache.get(feat.name());
-        DepIterator {
-            index: 0,
-            deps: deps,
-        }
+        DepIterator { index: 0, deps }
     }
 
     fn toplevel_features(&self) -> Vec<&String> {
@@ -133,7 +130,7 @@ fn parse_options() -> (Options, String) {
     (opts, dir)
 }
 
-fn resolve_dependencies<P>(dir: P, opts: &Options) -> Result<(), Box<std::error::Error>>
+fn resolve_dependencies<P>(dir: P, opts: &Options) -> Result<(), Box<dyn std::error::Error>>
 where
     P: AsRef<Path>,
 {
@@ -166,7 +163,7 @@ fn show_dependencies<P>(
     features: &Vec<Feature>,
     resolver: &DepResolver,
     local_only: bool,
-) -> Result<(), Box<std::error::Error>>
+) -> Result<(), Box<dyn std::error::Error>>
 where
     P: AsRef<Path>,
 {
@@ -196,14 +193,14 @@ where
     Ok(())
 }
 
-fn show_toplevel(resolver: &DepResolver) -> Result<(), Box<std::error::Error>> {
+fn show_toplevel(resolver: &DepResolver) -> Result<(), Box<dyn std::error::Error>> {
     for name in resolver.toplevel_features() {
         println!("{}.elc", name);
     }
     Ok(())
 }
 
-fn gather_dependencies(features: &Vec<Feature>) -> Result<DepResolver, Box<std::error::Error>> {
+fn gather_dependencies(features: &Vec<Feature>) -> Result<DepResolver, Box<dyn std::error::Error>> {
     let mut depgraph = DepResolver::new();
     for feature in features {
         if let Some(path_buf) = feature.path_buf() {
@@ -218,7 +215,7 @@ fn gather_dependencies(features: &Vec<Feature>) -> Result<DepResolver, Box<std::
     Ok(depgraph)
 }
 
-fn extract_requires<P>(path: P) -> Result<Vec<Feature>, Box<std::error::Error>>
+fn extract_requires<P>(path: P) -> Result<Vec<Feature>, Box<dyn std::error::Error>>
 where
     P: AsRef<Path>,
 {
